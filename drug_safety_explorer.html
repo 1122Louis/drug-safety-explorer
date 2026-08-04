@@ -64,7 +64,10 @@
   .warn b{ color:var(--warn-ink); }
   .warn .ic{ font-size:1.1rem; line-height:1.2; }
 
-  form.search{ display:flex; gap:8px; margin:18px 0 10px; flex-wrap:wrap; align-items:center; }
+  .tabs{ display:inline-flex; gap:4px; margin:18px 0 4px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; }
+  .tab{ font-size:0.9rem; padding:7px 14px; border-radius:7px; cursor:pointer; border:none; background:transparent; color:var(--ink-2); font-weight:500; }
+  .tab.active{ background:var(--s1); color:#fff; }
+  form.search{ display:flex; gap:8px; margin:10px 0 10px; flex-wrap:wrap; align-items:center; }
   .field{ display:flex; flex-direction:column; gap:3px; flex:1 1 220px; min-width:0; }
   .field label{ font-size:0.72rem; color:var(--muted); padding-left:2px; text-transform:uppercase; letter-spacing:0.03em; }
   input[type=text]{
@@ -219,19 +222,37 @@
     <span><b>These are reports, not proof.</b> A report does <b>not</b> mean the drug caused the problem, and we don't know how many people took each drug — so these counts can't tell you a true risk <i>rate</i>, and a drug with more reports isn't necessarily more dangerous (it may just be used more). Use them to spot patterns worth asking a doctor or researcher about.</span>
   </div>
 
-  <form class="search" id="form">
-    <div class="field">
-      <label for="q1">Drug</label>
-      <input type="text" id="q1" placeholder="e.g. Ozempic" autocomplete="off" spellcheck="false">
-    </div>
-    <span class="vs">vs</span>
-    <div class="field">
-      <label for="q2">Compare with (optional)</label>
-      <input type="text" id="q2" placeholder="e.g. Wegovy" autocomplete="off" spellcheck="false">
-    </div>
-    <button class="go" id="go" type="submit">Search</button>
-  </form>
-  <div class="chips" id="chips"><span class="cl">Try:</span></div>
+  <div class="tabs" id="tabs">
+    <button class="tab active" id="tabDrug" type="button">Search by drug</button>
+    <button class="tab" id="tabSx" type="button">Search by side effect</button>
+  </div>
+
+  <div id="drugSearch">
+    <form class="search" id="form">
+      <div class="field">
+        <label for="q1">Drug</label>
+        <input type="text" id="q1" placeholder="e.g. Ozempic" autocomplete="off" spellcheck="false">
+      </div>
+      <span class="vs">vs</span>
+      <div class="field">
+        <label for="q2">Compare with (optional)</label>
+        <input type="text" id="q2" placeholder="e.g. Wegovy" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="go" id="go" type="submit">Search</button>
+    </form>
+    <div class="chips" id="chips"><span class="cl">Try:</span></div>
+  </div>
+
+  <div id="sxSearch" style="display:none">
+    <form class="search" id="formSx">
+      <div class="field">
+        <label for="qsx">Side effect</label>
+        <input type="text" id="qsx" placeholder="e.g. Thyroid cancer" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="go" id="goSx" type="submit">Find drugs</button>
+    </form>
+    <div class="chips" id="chipsSx"><span class="cl">Try:</span></div>
+  </div>
 
   <div id="status"></div>
 
@@ -303,6 +324,28 @@
         <button class="dl" id="dlReac" type="button">⬇ CSV</button>
       </div>
       <div class="bars-wrap" id="barsWrap"></div>
+    </div>
+  </div>
+
+  <div id="revResults" style="display:none">
+    <div class="toolbar">
+      <span class="grow"></span>
+      <button class="dl" id="btnShareR" type="button">🔗 Copy link to this view</button>
+      <button class="dl" id="btnPrintR" type="button">🖨 Save as PDF</button>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h3 id="revTitle">Drugs most associated with this side effect</h3>
+          <p class="note">Among reports mentioning this side effect, which drugs show up <b>disproportionately</b>? Ranked by <b>PRR</b> — how much more often the drug is linked to this effect than expected. Grouped by active ingredient; only drugs with at least 10 such reports are shown.</p>
+        </div>
+        <button class="dl" id="dlRev" type="button">⬇ CSV</button>
+      </div>
+      <div id="revBody"></div>
+      <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
+        <span class="ic">⚠️</span>
+        <span><b>This shows reporting patterns, not proven cause.</b> A drug ranking high may simply be widely used, newly launched, or in the news. A high PRR is a reason to <i>investigate</i>, never a conclusion. Reports come from patients and doctors and are not verified.</span>
+      </div>
     </div>
   </div>
 
@@ -400,11 +443,99 @@ $("btnShare").onclick = async ()=>{
   try{ await navigator.clipboard.writeText(link); flashShare("✅ Link copied!"); }
   catch{ flashShare("Copy this from your address bar ⬆"); }
 };
-function flashShare(msg){
-  const b = $("btnShare"), old = b.textContent;
-  b.textContent = msg;
+function flashBtn(b, msg){
+  const old = b.textContent; b.textContent = msg;
   setTimeout(()=>{ b.textContent = old; }, 1800);
 }
+function flashShare(msg){ flashBtn($("btnShare"), msg); }
+
+// ===== mode tabs + reverse search (side effect -> drugs) =====
+const SX_EXAMPLES = ["Thyroid cancer","Pancreatitis","Hair loss","Suicidal ideation","Vision blurred"];
+SX_EXAMPLES.forEach(name=>{
+  const b=document.createElement("button"); b.type="button"; b.className="chip"; b.textContent=name;
+  b.onclick=()=>{ $("qsx").value=name; runReverse(name); };
+  $("chipsSx").appendChild(b);
+});
+function switchMode(mode){
+  const drug = mode==="drug";
+  $("tabDrug").classList.toggle("active", drug);
+  $("tabSx").classList.toggle("active", !drug);
+  $("drugSearch").style.display = drug ? "" : "none";
+  $("sxSearch").style.display   = drug ? "none" : "";
+  $("status").textContent=""; $("status").className="";
+  if(drug){ $("revResults").style.display="none"; }
+  else    { $("results").classList.remove("show"); $("revResults").style.display="none"; }
+}
+$("tabDrug").onclick = ()=> switchMode("drug");
+$("tabSx").onclick   = ()=> switchMode("sx");
+$("formSx").addEventListener("submit", e=>{ e.preventDefault(); const t=$("qsx").value.trim(); if(t) runReverse(t); });
+
+let CURRENT_REV = { term:"", rows:[] };
+const ND_CACHE = new Map();
+async function substanceTotal(sub){
+  if(ND_CACHE.has(sub)) return ND_CACHE.get(sub);
+  const q = encodeURIComponent(sub.replace(/"/g,''));
+  const n = await metaTotal(`patient.drug.openfda.substance_name.exact:"${q}"`);
+  ND_CACHE.set(sub, n); return n;
+}
+async function runReverse(term){
+  location.hash = "sx=" + encodeURIComponent(term);
+  $("goSx").disabled = true;
+  $("revResults").style.display = "none";
+  $("status").className=""; $("status").textContent = `Finding drugs linked to “${term}”…`;
+  try{
+    const R  = term.trim().toUpperCase().replace(/"/g,'');
+    const RE = encodeURIComponent(R);
+    const N  = await getGlobalTotal();
+    const nR = await getBackground(R);
+    if(!nR) throw new Error(`No reports mention “${term}”. Try the medical name (e.g. “alopecia” for hair loss) or check the spelling.`);
+    const drugRes = await fetch(`${API}?search=patient.reaction.reactionmeddrapt.exact:"${RE}"&count=patient.drug.openfda.substance_name.exact&limit=40`).then(r=>r.json());
+    const cands = (drugRes.results||[]).filter(x=>x.term && x.count>=10).slice(0,40);
+    const nDs = await Promise.all(cands.map(c=>substanceTotal(c.term)));
+    const rows = cands.map((c,i)=>{
+      const s = prrStats(c.count, nDs[i]||c.count, nR, N);
+      return { drug:titleCase(c.term), reports:c.count, prr:s.prr, chi:s.chi, signal:s.signal };
+    }).filter(r=>isFinite(r.prr) && r.prr>0).sort((a,b)=>b.prr-a.prr).slice(0,20);
+    CURRENT_REV = { term, rows };
+    renderReverse(term, nR, rows);
+    $("status").textContent="";
+  }catch(err){
+    $("status").className="err"; $("status").textContent = err.message || "Something went wrong.";
+  }finally{ $("goSx").disabled=false; }
+}
+function renderReverse(term, nR, rows){
+  $("revTitle").textContent = `Drugs most associated with “${titleCase(term)}”`;
+  let html = `<p style="font-size:0.84rem;color:var(--muted);margin:0 0 10px">`+
+             `${fmt(nR)} reports mention this side effect across all drugs.</p>`;
+  if(rows.length){
+    html += `<div class="sig-scroll"><table class="sig"><thead><tr>`+
+            `<th>#</th><th>Drug (active ingredient)</th><th style="text-align:right">Reports</th>`+
+            `<th style="text-align:right">PRR</th><th>Signal?</th></tr></thead><tbody>`;
+    rows.forEach((r,i)=>{
+      html += `<tr class="${r.signal?'signal':''}"><td class="num">${i+1}</td>`+
+              `<td>${r.drug}</td><td class="num">${fmt(r.reports)}</td>`+
+              `<td class="num">${prrPill(r.prr)}</td>`+
+              `<td><span class="flag ${r.signal?'yes':'no'}">${r.signal?'⬆ signal':'—'}</span></td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  } else {
+    html += `<p style="color:var(--muted)">No drug had enough reports (10+) to rank.</p>`;
+  }
+  $("revBody").innerHTML = html;
+  $("results").classList.remove("show");
+  $("revResults").style.display = "block";
+}
+$("dlRev").onclick = ()=>{
+  if(!CURRENT_REV.rows.length) return;
+  const rows=[["rank","drug","reports","PRR","chi_square","is_signal"]];
+  CURRENT_REV.rows.forEach((r,i)=>rows.push([i+1,r.drug,r.reports,r.prr.toFixed(2),r.chi.toFixed(1),r.signal?"yes":"no"]));
+  downloadCSV(`drugs_for_${CURRENT_REV.term.replace(/[^a-z0-9]+/gi,'_')}.csv`, rows);
+};
+$("btnPrintR").onclick = ()=> window.print();
+$("btnShareR").onclick = async ()=>{
+  try{ await navigator.clipboard.writeText(location.href); flashBtn($("btnShareR"),"✅ Link copied!"); }
+  catch{ flashBtn($("btnShareR"),"Copy from address bar ⬆"); }
+};
 
 async function fetchDrug(name){
   const search = buildSearch(name);
@@ -837,11 +968,18 @@ function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase(
 
 // ---- open a shared link: load drugs from the URL on startup ----
 (function initFromURL(){
-  const h = decodeURIComponent(location.hash.replace(/^#/,""));
-  if(!h) return;
-  const [a,b] = h.split("~");
-  if(a) $("q1").value = decodeURIComponent(a);
-  if(b) $("q2").value = decodeURIComponent(b);
+  const raw = location.hash.replace(/^#/,"");
+  if(!raw) return;
+  if(raw.startsWith("sx=")){
+    const term = decodeURIComponent(raw.slice(3));
+    switchMode("sx");
+    $("qsx").value = term;
+    runReverse(term);
+    return;
+  }
+  const [a,b] = raw.split("~").map(x=>decodeURIComponent(x));
+  if(a) $("q1").value = a;
+  if(b) $("q2").value = b;
   if(a) run();
 })();
 </script>
