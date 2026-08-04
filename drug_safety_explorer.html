@@ -156,6 +156,25 @@
   .bar-fill{ height:100%; border-radius:5px; min-width:2px; transition:width .5s ease; }
   .bar-val{ font-size:0.82rem; color:var(--ink-2); font-variant-numeric:tabular-nums; }
 
+  /* who & how serious */
+  .who-grid{ display:grid; gap:20px; }
+  .who-grid.two{ grid-template-columns:1fr 1fr; }
+  @media (max-width:640px){ .who-grid.two{ grid-template-columns:1fr; } }
+  .who-h{ font-weight:600; font-size:0.95rem; margin-bottom:4px; }
+  .who-sub{ font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:12px 0 6px; }
+  .seg{ display:flex; height:24px; border-radius:6px; overflow:hidden; }
+  .seg > span{ display:flex; align-items:center; justify-content:center; font-size:0.74rem; color:#fff; font-weight:600; min-width:0; }
+  .agerow{ display:grid; grid-template-columns:56px 1fr 44px; gap:8px; align-items:center; margin-bottom:5px; }
+  .agerow .al{ font-size:0.8rem; color:var(--ink-2); }
+  .agerow .av{ font-size:0.8rem; color:var(--ink-2); text-align:right; font-variant-numeric:tabular-nums; }
+  .agerow .at{ height:16px; border-radius:4px; overflow:hidden; }
+  .agerow .af{ height:100%; border-radius:4px; min-width:2px; }
+  .chips-out{ display:flex; flex-wrap:wrap; gap:8px; }
+  .outchip{ background:var(--plane); border:1px solid var(--border); border-radius:9px; padding:7px 11px; font-size:0.8rem; color:var(--ink-2); }
+  .outchip b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+  .outchip.bad b{ color:#c0392b; }
+  @media (prefers-color-scheme: dark){ .outchip.bad b{ color:#ff8a80; } }
+
   /* signal table */
   .sig-title{ font-weight:600; font-size:0.9rem; margin:14px 0 6px; }
   .sig-scroll{ overflow-x:auto; }
@@ -248,6 +267,16 @@
         <span class="ic">⚠️</span>
         <span><b>Read this as a rough signal, not a real risk rate.</b> The reports come from <i>everyone</i> (all ages, worldwide), but the prescription count is <b>Medicare only</b> (mostly 65+, U.S.) — so the two don't perfectly match. It's most meaningful for <i>comparing two similar drugs</i>, not as an absolute number. Drugs with no reliable Medicare data (over-the-counter or newly-covered) show no rate.</span>
       </div>
+    </div>
+
+    <div class="card" id="whoCard" style="display:none">
+      <div class="card-head">
+        <div>
+          <h3>Who is affected &amp; how serious</h3>
+          <p class="note">The age and sex of people in these reports, and how many describe a serious outcome. Many reports leave these blank, so percentages are of the reports that filled them in.</p>
+        </div>
+      </div>
+      <div class="who-grid" id="whoBody"></div>
     </div>
 
     <div class="card" id="signalCard" style="display:none">
@@ -480,6 +509,7 @@ function render(drugs){
   drawRate(drugs);
   drawBars(drugs);
   $("results").classList.add("show");
+  drawWho(drugs);       // async — demographics & seriousness
   drawSignals(drugs);   // async — fills its card when the extra lookups finish
 }
 
@@ -556,6 +586,82 @@ function drawLine(drugs){
     cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
   });
 }
+
+// ---------------- who is affected & how serious ----------------
+async function metaTotal(query){
+  const j = await fetch(`${API}?search=${query}&limit=1`).then(r=>r.json());
+  return (j.meta && j.meta.results) ? j.meta.results.total : 0;
+}
+async function fetchWho(d){
+  const s = buildSearch(d.name);
+  const [sexRes, ageRes, serRes, death, hosp, lifeth] = await Promise.all([
+    fetch(`${API}?search=${s}&count=patient.patientsex`).then(r=>r.json()),
+    fetch(`${API}?search=(${s})+AND+patient.patientonsetageunit:801&count=patient.patientonsetage`).then(r=>r.json()),
+    fetch(`${API}?search=${s}&count=serious`).then(r=>r.json()),
+    metaTotal(`(${s})+AND+seriousnessdeath:1`),
+    metaTotal(`(${s})+AND+seriousnesshospitalization:1`),
+    metaTotal(`(${s})+AND+seriousnesslifethreatening:1`)
+  ]);
+  const sx = t => { const r=(sexRes.results||[]).find(x=>x.term===t); return r?r.count:0; };
+  const female = sx("2"), male = sx("1");
+  // age buckets (years)
+  const age = {"0-17":0,"18-44":0,"45-64":0,"65+":0}; let ageTot = 0;
+  (ageRes.results||[]).forEach(x=>{
+    const a = parseFloat(x.term); if(isNaN(a)||a>120) return;
+    ageTot += x.count;
+    if(a<18) age["0-17"]+=x.count;
+    else if(a<45) age["18-44"]+=x.count;
+    else if(a<65) age["45-64"]+=x.count;
+    else age["65+"]+=x.count;
+  });
+  const ser = t => { const r=(serRes.results||[]).find(x=>x.term===t); return r?r.count:0; };
+  const serious = ser("1"), nonSerious = ser("2");
+  return { female, male, age, ageTot, serious, nonSerious, death, hosp, lifeth, nD:d.nD };
+}
+async function drawWho(drugs){
+  const card=$("whoCard"), body=$("whoBody");
+  card.style.display="block";
+  body.className = "who-grid" + (drugs.length>1?" two":"");
+  body.innerHTML = `<p style="color:var(--muted)">Loading demographics…</p>`;
+  try{
+    const data = await Promise.all(drugs.map(fetchWho));
+    drugs.forEach((d,i)=> d.who = data[i]);
+    body.innerHTML = drugs.map((d,i)=> whoBlockHTML(d, data[i])).join("");
+  }catch(err){
+    body.innerHTML = `<p style="color:var(--muted)">Couldn't load demographics (${err.message}).</p>`;
+  }
+}
+function whoBlockHTML(d, w){
+  const pct = (n,tot) => tot ? Math.round(n/tot*100) : 0;
+  const sexTot = w.female + w.male;
+  const fP = pct(w.female, sexTot), mP = 100 - fP;
+  const ageMax = Math.max(...Object.values(w.age), 1);
+  let ageRows = Object.entries(w.age).map(([lab,n])=>{
+    const p = pct(n, w.ageTot);
+    return `<div class="agerow"><span class="al">${lab}</span>`+
+           `<span class="at" style="background:${d.soft}"><span class="af" style="width:${(n/ageMax*100).toFixed(1)}%;background:${d.color};display:block"></span></span>`+
+           `<span class="av">${p}%</span></div>`;
+  }).join("");
+  const serP = pct(w.serious, w.serious + w.nonSerious);
+  const head = drugs_len()>1 ? `<div class="who-h" style="color:${d.color}">${d.name}</div>` : "";
+  return `<div>${head}
+    <div class="who-sub">Sex ${sexTot?`— ${fmt(sexTot)} reports`:""}</div>
+    <div class="seg">
+      <span style="width:${fP}%;background:${d.color}">${fP>=12?`♀ ${fP}%`:""}</span>
+      <span style="width:${mP}%;background:${d.soft};color:var(--ink-2)">${mP>=12?`♂ ${mP}%`:""}</span>
+    </div>
+    <div class="who-sub">Age ${w.ageTot?`— ${fmt(w.ageTot)} with known age`:"— no age data"}</div>
+    ${w.ageTot?ageRows:'<p style="color:var(--muted);font-size:.82rem">Not reported.</p>'}
+    <div class="who-sub">Outcomes</div>
+    <div class="chips-out">
+      <span class="outchip"><b>${serP}%</b> serious</span>
+      <span class="outchip"><b>${fmt(w.hosp)}</b> hospitalized <span style="opacity:.7">(${pct(w.hosp,w.nD)}%)</span></span>
+      <span class="outchip bad"><b>${fmt(w.death)}</b> deaths <span style="opacity:.7">(${pct(w.death,w.nD)}%)</span></span>
+      <span class="outchip"><b>${fmt(w.lifeth)}</b> life-threatening</span>
+    </div>
+  </div>`;
+}
+function drugs_len(){ return CURRENT.length; }
 
 // ---------------- signal detection (PRR) ----------------
 // Administrative / non-medical MedDRA terms that aren't real side effects.
