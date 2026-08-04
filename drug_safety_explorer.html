@@ -192,6 +192,16 @@
       </div>
     </div>
 
+    <div class="card" id="rateCard" style="display:none">
+      <h3>Reports per 100,000 prescriptions <span style="font-weight:400;color:var(--muted)">— rough estimate</span></h3>
+      <p class="note">Raw report counts are unfair to compare: a drug used by millions will naturally have more reports. Dividing by prescription volume is a fairer way to compare. Here we use <b>Medicare Part D</b> claims for 2020–2024 as the denominator.</p>
+      <div id="rateBody"></div>
+      <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
+        <span class="ic">⚠️</span>
+        <span><b>Read this as a rough signal, not a real risk rate.</b> The reports come from <i>everyone</i> (all ages, worldwide), but the prescription count is <b>Medicare only</b> (mostly 65+, U.S.) — so the two don't perfectly match. It's most meaningful for <i>comparing two similar drugs</i>, not as an absolute number. Drugs with no reliable Medicare data (over-the-counter or newly-covered) show no rate.</span>
+      </div>
+    </div>
+
     <div class="card">
       <h3>Top 10 reported side effects</h3>
       <p class="note">The reactions named most often across all reports for each drug.</p>
@@ -207,7 +217,27 @@
 
 <script>
 const API = "https://api.fda.gov/drug/event.json";
-const EXAMPLES = ["Ozempic","Wegovy","Aspirin","Viagra","Tylenol","Ibuprofen"];
+const EXAMPLES = ["Ozempic","Jardiance","Trulicity","Eliquis","Januvia","Farxiga"];
+
+// Medicare Part D total prescription claims 2020–2024, from CMS "Part D Spending
+// by Drug" (data.cms.gov). Baked in because CMS's server blocks live browser
+// requests. Only drugs with a large, reliable Part D denominator are listed —
+// keyed by the name a user is likely to type (UPPERCASE).
+const RX_CLAIMS = {
+  "OZEMPIC":     { generic:"Semaglutide",  claims:23976308 },
+  "JARDIANCE":   { generic:"Empagliflozin",claims:31676690 },
+  "TRULICITY":   { generic:"Dulaglutide",  claims:20759370 },
+  "JANUVIA":     { generic:"Sitagliptin",  claims:21471036 },
+  "ELIQUIS":     { generic:"Apixaban",     claims:96092704 },
+  "XARELTO":     { generic:"Rivaroxaban",  claims:32789405 },
+  "MOUNJARO":    { generic:"Tirzepatide",  claims:7047978  },
+  "FARXIGA":     { generic:"Dapagliflozin",claims:14997759 },
+  "LISINOPRIL":  { generic:"Lisinopril",   claims:181087552 },
+  "METFORMIN":   { generic:"Metformin",    claims:120640845 },
+  "GABAPENTIN":  { generic:"Gabapentin",   claims:171037866 },
+  "ATORVASTATIN":{ generic:"Atorvastatin", claims:322423601 }
+};
+const RX_YEARS = [2020,2021,2022,2023,2024];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmt = n => n.toLocaleString("en-US");
 const $ = id => document.getElementById(id);
@@ -253,10 +283,18 @@ async function fetchDrug(name){
   const points = months.map(m=>({ key:m, idx:mIdx(m), count:byMonth.get(m) }));
   let peak = points[0];
   for(const p of points) if(p.count>peak.count) peak=p;
+
+  // rate feature: reports in the same 2020–2024 window as the Medicare data
+  const rx = RX_CLAIMS[name.trim().toUpperCase()] || null;
+  let reportsWin = 0;
+  for(const p of points){ const y = +p.key.slice(0,4); if(y>=2020 && y<=2024) reportsWin += p.count; }
+  const rate = rx ? (reportsWin / rx.claims) * 100000 : null;
+
   return {
     name, total, points, peak,
     first: months[0], last: months[months.length-1],
-    reactions: (reacRes.results||[]).slice(0,10)
+    reactions: (reacRes.results||[]).slice(0,10),
+    rx, reportsWin, rate
   };
 }
 const mIdx = key => { const [y,m]=key.split("-").map(Number); return y*12+(m-1); };
@@ -316,6 +354,7 @@ function render(drugs){
   } else legend.innerHTML="";
 
   drawLine(drugs);
+  drawRate(drugs);
   drawBars(drugs);
   $("results").classList.add("show");
 }
@@ -392,6 +431,46 @@ function drawLine(drugs){
   cap.addEventListener("mouseleave", ()=>{
     cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
   });
+}
+
+// ---------------- rate (reports per 100k Rx) ----------------
+function drawRate(drugs){
+  const card = $("rateCard"), body = $("rateBody");
+  const withRx = drugs.filter(d=>d.rate!=null);
+  if(!withRx.length){ card.style.display="none"; return; }
+  card.style.display="block";
+
+  const maxRate = Math.max(...withRx.map(d=>d.rate));
+  let html = `<div class="bars">`;
+  drugs.forEach(d=>{
+    if(d.rate==null){
+      html += `<div style="font-size:0.85rem;color:var(--muted);padding:2px 0">`+
+              `<b style="color:var(--ink-2)">${d.name}</b> — no reliable Medicare Part D denominator `+
+              `(over-the-counter or not covered), so no rate shown.</div>`;
+      return;
+    }
+    const pct = (d.rate/maxRate*100).toFixed(1);
+    html +=
+      `<div class="bar-row" style="grid-template-columns:150px 1fr auto">`+
+        `<div class="bar-lab" style="color:${d.color};font-weight:600">${d.name}</div>`+
+        `<div class="bar-track" style="background:${d.soft}"><div class="bar-fill" style="width:${pct}%;background:${d.color}"></div></div>`+
+        `<div class="bar-val"><b>${fmt(Math.round(d.rate))}</b> / 100k</div>`+
+      `</div>`+
+      `<div style="font-size:0.76rem;color:var(--muted);margin:-2px 0 4px 160px">`+
+        `${fmt(d.reportsWin)} reports (2020–24) ÷ ${fmt(d.rx.claims)} Medicare claims × 100,000`+
+      `</div>`;
+  });
+  html += `</div>`;
+
+  if(withRx.length===2){
+    const [a,b] = withRx;
+    const hi = a.rate>=b.rate ? a : b, lo = a.rate>=b.rate ? b : a;
+    const x = (hi.rate/lo.rate);
+    html += `<p style="font-size:0.88rem;margin:12px 0 0">Adjusting for how much each drug is prescribed, `+
+            `<b style="color:${hi.color}">${hi.name}</b> has about <b>${x.toFixed(1)}×</b> as many reports per prescription as `+
+            `<b style="color:${lo.color}">${lo.name}</b>.</p>`;
+  }
+  body.innerHTML = html;
 }
 
 function nearest(points, idx){
