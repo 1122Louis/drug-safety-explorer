@@ -445,12 +445,17 @@ function buildSearch(name){
   ].join("+OR+");
 }
 
-// example chips fill drug 1
+// example chips fill the first empty box, so you can build a comparison by clicking:
+// first click -> primary drug, next click -> the "compare with" drug
 const chips = $("chips");
 EXAMPLES.forEach(name=>{
   const b = document.createElement("button");
   b.type="button"; b.className="chip"; b.textContent=name;
-  b.onclick = ()=>{ $("q1").value=name; run(); };
+  b.onclick = ()=>{
+    if(!$("q1").value.trim()) $("q1").value = name;
+    else $("q2").value = name;
+    run();
+  };
   chips.appendChild(b);
 });
 
