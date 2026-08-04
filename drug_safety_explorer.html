@@ -346,6 +346,21 @@
       </div>
       <div class="bars-wrap" id="barsWrap"></div>
     </div>
+
+    <div class="card" id="coCard" style="display:none">
+      <div class="card-head">
+        <div>
+          <h3>💊 Commonly taken alongside</h3>
+          <p class="note">Other drugs (by active ingredient) most often listed in the same reports — a picture of what else these patients are on. Shown as a share of the drug's reports; the drug itself is excluded.</p>
+        </div>
+        <button class="dl" id="dlCo" type="button">⬇ CSV</button>
+      </div>
+      <div class="bars-wrap" id="coBody"></div>
+      <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
+        <span class="ic">⚠️</span>
+        <span><b>Taken together ≠ an interaction.</b> This mostly reflects the typical treatment regimen for these patients (e.g. other diabetes or heart drugs), not proof that the combination caused harm. A report listing several drugs doesn't say which one is responsible.</span>
+      </div>
+    </div>
   </div>
 
   <div id="revResults" style="display:none">
@@ -664,6 +679,7 @@ function render(drugs){
   drawWho(drugs);       // async — demographics & seriousness
   drawSignals(drugs);   // async — fills its card when the extra lookups finish
   drawEmerging(drugs);  // async — which side effects are rising over time
+  drawCo(drugs);        // async — drugs commonly taken alongside
 }
 
 // ---------------- line chart (1–2 series, shared time axis) ----------------
@@ -739,6 +755,46 @@ function drawLine(drugs){
     cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
   });
 }
+
+// ---------------- commonly taken alongside ----------------
+async function fetchCo(d){
+  const s = buildSearch(d.name);
+  const j = await fetch(`${API}?search=${s}&count=patient.drug.openfda.substance_name.exact&limit=25`).then(r=>r.json());
+  const nD = d.nD || 1;
+  return (j.results||[])
+    .filter(x => x.term && (x.count/nD) < 0.8)   // drop the drug itself / near-ubiquitous co-formulations
+    .slice(0,10)
+    .map(x => ({ name:titleCase(x.term), count:x.count, share:100*x.count/nD }));
+}
+async function drawCo(drugs){
+  const card=$("coCard"), body=$("coBody");
+  card.style.display="block";
+  body.className = "bars-wrap" + (drugs.length>1?" two":"");
+  body.innerHTML = `<p style="color:var(--muted)">Loading co-reported drugs…</p>`;
+  try{
+    const data = await Promise.all(drugs.map(fetchCo));
+    drugs.forEach((d,i)=> d.coDrugs = data[i]);
+    body.innerHTML = drugs.map((d,i)=> coBlockHTML(d, data[i])).join("");
+  }catch(err){
+    body.innerHTML = `<p style="color:var(--muted)">Couldn't load co-reported drugs (${err.message}).</p>`;
+  }
+}
+function coBlockHTML(d, rows){
+  const head = CURRENT.length>1 ? `<div class="who-h" style="color:${d.color}">${d.name}</div>` : "";
+  if(!rows.length) return `<div>${head}<p style="color:var(--muted)">No co-reported drugs found.</p></div>`;
+  const max = rows[0].share;
+  const bars = rows.map(r=>
+    `<div class="bar-row"><div class="bar-lab" title="${r.name}">${r.name}</div>`+
+    `<div class="bar-track" style="background:${d.soft}"><div class="bar-fill" style="width:${(r.share/max*100).toFixed(1)}%;background:${d.color}"></div></div>`+
+    `<div class="bar-val">${r.share.toFixed(1)}%</div></div>`).join("");
+  return `<div>${head}<div class="bars">${bars}</div></div>`;
+}
+$("dlCo").onclick = ()=>{
+  if(!CURRENT.length) return;
+  const rows=[["drug","co_reported_drug","reports","share_percent"]];
+  CURRENT.forEach(d=> (d.coDrugs||[]).forEach(r=> rows.push([d.name, r.name, r.count, r.share.toFixed(2)])));
+  downloadCSV(`co_reported_${slug()}.csv`, rows);
+};
 
 // ---------------- emerging signals (rising share over time) ----------------
 const EMERGE_TOP = 12;   // analyse each drug's 12 most-reported side effects
