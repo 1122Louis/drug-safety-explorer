@@ -438,7 +438,11 @@ function cssVar(name){ return getComputedStyle(document.documentElement).getProp
 
 function buildSearch(name){
   const v = encodeURIComponent(name.trim().toUpperCase().replace(/"/g,''));
+  // Search the raw reported name (medicinalproduct) AND the FDA's harmonized
+  // openfda fields. Some drugs (e.g. Eliquis) are only in the raw field, so
+  // without medicinalproduct they'd wrongly return "no reports found".
   return [
+    `patient.drug.medicinalproduct:"${v}"`,
     `patient.drug.openfda.brand_name:"${v}"`,
     `patient.drug.openfda.generic_name:"${v}"`,
     `patient.drug.openfda.substance_name:"${v}"`
