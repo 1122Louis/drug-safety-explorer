@@ -110,8 +110,17 @@
     background:var(--surface); border:1px solid var(--border); border-radius:16px;
     padding:20px 20px 14px; margin:16px 0; box-shadow:var(--shadow);
   }
+  .card-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .card h3{ margin:0 0 2px; font-size:1.02rem; }
   .card p.note{ margin:0 0 8px; color:var(--muted); font-size:0.82rem; }
+  button.dl{
+    flex:0 0 auto; font-size:0.78rem; padding:6px 11px; cursor:pointer; white-space:nowrap;
+    border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink-2);
+  }
+  button.dl:hover{ color:var(--ink); border-color:var(--s1); }
+
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:22px 0 -6px; }
+  .toolbar .grow{ flex:1; }
 
   .legend{ display:flex; gap:16px; margin:2px 0 12px; flex-wrap:wrap; }
   .legend span{ display:inline-flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--ink-2); }
@@ -149,6 +158,14 @@
 
   footer{ margin-top:34px; color:var(--muted); font-size:0.8rem; border-top:1px solid var(--border); padding-top:14px; }
   footer a{ color:var(--s1); }
+
+  @media print{
+    body{ background:#fff; }
+    .warn, .card, .scard{ box-shadow:none; }
+    form.search, .chips, .toolbar, button.dl, #status{ display:none !important; }
+    .card{ break-inside:avoid; }
+    *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
 </style>
 </head>
 <body>
@@ -180,11 +197,22 @@
   <div id="status"></div>
 
   <div id="results">
+    <div class="toolbar" id="toolbar">
+      <span class="grow"></span>
+      <button class="dl" id="btnShare" type="button">🔗 Copy link to this view</button>
+      <button class="dl" id="btnPrint" type="button">🖨 Save as PDF</button>
+    </div>
+
     <div class="summ" id="summ"></div>
 
     <div class="card">
-      <h3>Reports over time</h3>
-      <p class="note">Number of adverse-event reports the FDA received each month.</p>
+      <div class="card-head">
+        <div>
+          <h3>Reports over time</h3>
+          <p class="note">Number of adverse-event reports the FDA received each month.</p>
+        </div>
+        <button class="dl" id="dlTime" type="button">⬇ CSV</button>
+      </div>
       <div class="legend" id="legend"></div>
       <div class="chart-holder">
         <svg id="lineChart" viewBox="0 0 800 320" preserveAspectRatio="none" role="img" aria-label="Reports per month over time"></svg>
@@ -203,8 +231,13 @@
     </div>
 
     <div class="card">
-      <h3>Top 10 reported side effects</h3>
-      <p class="note">The reactions named most often across all reports for each drug.</p>
+      <div class="card-head">
+        <div>
+          <h3>Top 10 reported side effects</h3>
+          <p class="note">The reactions named most often across all reports for each drug.</p>
+        </div>
+        <button class="dl" id="dlReac" type="button">⬇ CSV</button>
+      </div>
       <div class="bars-wrap" id="barsWrap"></div>
     </div>
   </div>
@@ -265,6 +298,43 @@ EXAMPLES.forEach(name=>{
 
 $("form").addEventListener("submit", e=>{ e.preventDefault(); run(); });
 
+// ---- download / share / print (polish) ----
+function downloadCSV(filename, rows){
+  const csv = rows.map(r=>r.map(c=>{
+    const s = String(c==null?"":c);
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+}
+function slug(){ return CURRENT.map(d=>d.name).join("-vs-").replace(/[^a-z0-9-]+/gi,"_"); }
+
+$("dlTime").onclick = ()=>{
+  if(!CURRENT.length) return;
+  const rows = [["drug","month","reports"]];
+  CURRENT.forEach(d=> d.points.forEach(p=> rows.push([d.name, p.key, p.count])));
+  downloadCSV(`reports_over_time_${slug()}.csv`, rows);
+};
+$("dlReac").onclick = ()=>{
+  if(!CURRENT.length) return;
+  const rows = [["drug","rank","side_effect","reports"]];
+  CURRENT.forEach(d=> d.reactions.forEach((r,i)=> rows.push([d.name, i+1, r.term, r.count])));
+  downloadCSV(`side_effects_${slug()}.csv`, rows);
+};
+$("btnPrint").onclick = ()=> window.print();
+$("btnShare").onclick = async ()=>{
+  const link = location.href;
+  try{ await navigator.clipboard.writeText(link); flashShare("✅ Link copied!"); }
+  catch{ flashShare("Copy this from your address bar ⬆"); }
+};
+function flashShare(msg){
+  const b = $("btnShare"), old = b.textContent;
+  b.textContent = msg;
+  setTimeout(()=>{ b.textContent = old; }, 1800);
+}
+
 async function fetchDrug(name){
   const search = buildSearch(name);
   const [timeRes, reacRes] = await Promise.all([
@@ -304,6 +374,9 @@ async function run(){
   const n2 = $("q2").value.trim();
   if(!n1){ $("q1").focus(); return; }
 
+  // reflect the search in the URL so it can be bookmarked / shared
+  location.hash = encodeURIComponent(n1) + (n2 ? "~"+encodeURIComponent(n2) : "");
+
   $("go").disabled = true;
   $("results").classList.remove("show");
   $("status").className = "";
@@ -328,7 +401,9 @@ async function run(){
   }
 }
 
+let CURRENT = [];   // last rendered drugs, for CSV export
 function render(drugs){
+  CURRENT = drugs;
   const colors = [cssVar("--s1"), cssVar("--s2")];
   const softs  = [cssVar("--s1-soft"), cssVar("--s2-soft")];
   drugs.forEach((d,i)=>{ d.color=colors[i]; d.soft=softs[i]; });
@@ -514,6 +589,16 @@ function drawBars(drugs){
   });
 }
 function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase()); }
+
+// ---- open a shared link: load drugs from the URL on startup ----
+(function initFromURL(){
+  const h = decodeURIComponent(location.hash.replace(/^#/,""));
+  if(!h) return;
+  const [a,b] = h.split("~");
+  if(a) $("q1").value = decodeURIComponent(a);
+  if(b) $("q2").value = decodeURIComponent(b);
+  if(a) run();
+})();
 </script>
 </body>
 </html>
