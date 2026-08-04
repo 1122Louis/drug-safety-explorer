@@ -14,8 +14,10 @@
     --muted:        #898781;
     --grid:         #e1e0d9;
     --axis:         #c3c2b7;
-    --series:       #2a78d6;
-    --series-soft:  rgba(42,120,214,0.12);
+    --s1:           #2a78d6;   /* series 1 – blue  */
+    --s2:           #eb6834;   /* series 2 – orange */
+    --s1-soft:      rgba(42,120,214,0.12);
+    --s2-soft:      rgba(235,104,52,0.12);
     --border:       rgba(11,11,11,0.10);
     --warn-bg:      #fff6e6;
     --warn-ink:     #7a5200;
@@ -32,8 +34,10 @@
       --muted:        #898781;
       --grid:         #2c2c2a;
       --axis:         #383835;
-      --series:       #3987e5;
-      --series-soft:  rgba(57,135,229,0.16);
+      --s1:           #3987e5;
+      --s2:           #d95926;
+      --s1-soft:      rgba(57,135,229,0.16);
+      --s2-soft:      rgba(217,89,38,0.16);
       --border:       rgba(255,255,255,0.10);
       --warn-bg:      #2a2210;
       --warn-ink:     #f0cd7f;
@@ -60,24 +64,30 @@
   .warn b{ color:var(--warn-ink); }
   .warn .ic{ font-size:1.1rem; line-height:1.2; }
 
-  form.search{ display:flex; gap:8px; margin:18px 0 10px; flex-wrap:wrap; }
+  form.search{ display:flex; gap:8px; margin:18px 0 10px; flex-wrap:wrap; align-items:center; }
+  .field{ display:flex; flex-direction:column; gap:3px; flex:1 1 220px; min-width:0; }
+  .field label{ font-size:0.72rem; color:var(--muted); padding-left:2px; text-transform:uppercase; letter-spacing:0.03em; }
   input[type=text]{
-    flex:1 1 240px; min-width:0; font-size:1rem; padding:12px 14px;
+    width:100%; font-size:1rem; padding:11px 13px;
     border:1px solid var(--border); border-radius:10px;
     background:var(--surface); color:var(--ink);
   }
-  input[type=text]:focus{ outline:2px solid var(--series); outline-offset:1px; }
+  input#q2{ border-left:3px solid var(--s2); }
+  input#q1{ border-left:3px solid var(--s1); }
+  input[type=text]:focus{ outline:2px solid var(--s1); outline-offset:1px; }
+  .vs{ color:var(--muted); font-size:0.8rem; padding-top:18px; font-weight:600; }
   button.go{
-    font-size:1rem; font-weight:600; padding:12px 20px; cursor:pointer;
-    border:none; border-radius:10px; background:var(--series); color:#fff;
+    font-size:1rem; font-weight:600; padding:11px 20px; cursor:pointer; margin-top:16px;
+    border:none; border-radius:10px; background:var(--s1); color:#fff; flex:0 0 auto;
   }
   button.go:disabled{ opacity:.6; cursor:progress; }
-  .chips{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center; }
+  .chips .cl{ font-size:0.78rem; color:var(--muted); margin-right:2px; }
   .chip{
     font-size:0.85rem; padding:5px 12px; border-radius:999px; cursor:pointer;
     border:1px solid var(--border); background:var(--surface); color:var(--ink-2);
   }
-  .chip:hover{ color:var(--ink); border-color:var(--series); }
+  .chip:hover{ color:var(--ink); border-color:var(--s1); }
 
   #status{ margin:24px 0; color:var(--ink-2); font-size:0.95rem; }
   #status.err{ color:#c0392b; }
@@ -86,23 +96,26 @@
   #results{ display:none; }
   #results.show{ display:block; }
 
-  .drug-name{ font-size:1.25rem; font-weight:700; margin:26px 0 2px; }
-
-  .tiles{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:14px 0 8px; }
-  @media (max-width:560px){ .tiles{ grid-template-columns:1fr; } }
-  .tile{
+  .summ{ display:flex; flex-direction:column; gap:10px; margin:22px 0 8px; }
+  .scard{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px;
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
-    padding:16px 18px; box-shadow:var(--shadow);
+    padding:14px 18px; box-shadow:var(--shadow); border-left-width:4px; border-left-style:solid;
   }
-  .tile .val{ font-size:1.7rem; font-weight:700; letter-spacing:-0.01em; }
-  .tile .lab{ font-size:0.82rem; color:var(--muted); margin-top:2px; }
+  .scard .nm{ font-size:1.1rem; font-weight:700; margin-right:4px; }
+  .scard .met{ font-size:0.86rem; color:var(--ink-2); }
+  .scard .met b{ color:var(--ink); font-variant-numeric:tabular-nums; }
 
   .card{
     background:var(--surface); border:1px solid var(--border); border-radius:16px;
     padding:20px 20px 14px; margin:16px 0; box-shadow:var(--shadow);
   }
   .card h3{ margin:0 0 2px; font-size:1.02rem; }
-  .card p.note{ margin:0 0 14px; color:var(--muted); font-size:0.82rem; }
+  .card p.note{ margin:0 0 8px; color:var(--muted); font-size:0.82rem; }
+
+  .legend{ display:flex; gap:16px; margin:2px 0 12px; flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--ink-2); }
+  .legend i{ width:12px; height:12px; border-radius:3px; display:inline-block; }
 
   svg{ display:block; width:100%; height:auto; overflow:visible; }
   .gridline{ stroke:var(--grid); stroke-width:1; }
@@ -110,68 +123,69 @@
   .tick{ fill:var(--muted); font-size:11px; }
   .tick.y{ text-anchor:end; }
   .tick.x{ text-anchor:middle; }
-  .line{ fill:none; stroke:var(--series); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
-  .area{ fill:var(--series-soft); stroke:none; }
-
-  /* line hover */
+  .line{ fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
   .cross{ stroke:var(--axis); stroke-width:1; stroke-dasharray:3 3; opacity:0; }
-  .dot{ fill:var(--series); stroke:var(--surface); stroke-width:2; opacity:0; }
+  .dot{ stroke:var(--surface); stroke-width:2; opacity:0; }
   .tooltip{
     position:absolute; pointer-events:none; opacity:0; transition:opacity .08s;
-    background:var(--ink); color:var(--plane); font-size:12px; line-height:1.35;
-    padding:6px 9px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-115%);
+    background:var(--ink); color:var(--plane); font-size:12px; line-height:1.4;
+    padding:7px 10px; border-radius:8px; white-space:nowrap; transform:translate(-50%,-115%);
     box-shadow:0 4px 12px rgba(0,0,0,.25); z-index:5;
   }
-  .tooltip b{ color:var(--plane); }
+  .tooltip .k{ display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; }
   .chart-holder{ position:relative; }
 
-  /* bars */
-  .bars{ display:flex; flex-direction:column; gap:9px; }
-  .bar-row{ display:grid; grid-template-columns:170px 1fr auto; gap:10px; align-items:center; }
-  @media (max-width:560px){ .bar-row{ grid-template-columns:120px 1fr auto; } }
-  .bar-lab{ font-size:0.83rem; color:var(--ink-2); text-align:right;
+  .bars-wrap{ display:grid; gap:16px; }
+  .bars-wrap.two{ grid-template-columns:1fr 1fr; }
+  @media (max-width:640px){ .bars-wrap.two{ grid-template-columns:1fr; } }
+  .bars{ display:flex; flex-direction:column; gap:8px; }
+  .bar-row{ display:grid; grid-template-columns:150px 1fr auto; gap:10px; align-items:center; }
+  @media (max-width:560px){ .bar-row{ grid-template-columns:110px 1fr auto; } }
+  .bar-lab{ font-size:0.82rem; color:var(--ink-2); text-align:right;
             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .bar-track{ background:var(--series-soft); border-radius:5px; height:20px; overflow:hidden; }
-  .bar-fill{ background:var(--series); height:100%; border-radius:5px; min-width:2px;
-             transition:width .5s ease; }
-  .bar-val{ font-size:0.83rem; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .bar-track{ border-radius:5px; height:19px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:5px; min-width:2px; transition:width .5s ease; }
+  .bar-val{ font-size:0.82rem; color:var(--ink-2); font-variant-numeric:tabular-nums; }
 
   footer{ margin-top:34px; color:var(--muted); font-size:0.8rem; border-top:1px solid var(--border); padding-top:14px; }
-  footer a{ color:var(--series); }
+  footer a{ color:var(--s1); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>💊 FDA Drug Safety Explorer</h1>
-    <p class="sub">Type a drug name to see its real-world side-effect reports from the U.S. FDA — how many, over what years, and which reactions come up most.</p>
+    <p class="sub">Type a drug to see its real-world side-effect reports from the U.S. FDA — how many, over what years, and which reactions come up most. Add a second drug to compare them.</p>
   </header>
 
   <div class="warn">
     <span class="ic">⚠️</span>
-    <span><b>These are reports, not proof.</b> A report does <b>not</b> mean the drug caused the problem, and we don't know how many people took the drug — so these counts can't tell you a true risk <i>rate</i>. Use them to spot patterns worth asking a doctor or researcher about, nothing more.</span>
+    <span><b>These are reports, not proof.</b> A report does <b>not</b> mean the drug caused the problem, and we don't know how many people took each drug — so these counts can't tell you a true risk <i>rate</i>, and a drug with more reports isn't necessarily more dangerous (it may just be used more). Use them to spot patterns worth asking a doctor or researcher about.</span>
   </div>
 
   <form class="search" id="form">
-    <input type="text" id="q" placeholder="e.g. Ozempic, Aspirin, Semaglutide…" autocomplete="off" spellcheck="false">
+    <div class="field">
+      <label for="q1">Drug</label>
+      <input type="text" id="q1" placeholder="e.g. Ozempic" autocomplete="off" spellcheck="false">
+    </div>
+    <span class="vs">vs</span>
+    <div class="field">
+      <label for="q2">Compare with (optional)</label>
+      <input type="text" id="q2" placeholder="e.g. Wegovy" autocomplete="off" spellcheck="false">
+    </div>
     <button class="go" id="go" type="submit">Search</button>
   </form>
-  <div class="chips" id="chips"></div>
+  <div class="chips" id="chips"><span class="cl">Try:</span></div>
 
   <div id="status"></div>
 
   <div id="results">
-    <div class="drug-name" id="drugName"></div>
-
-    <div class="tiles">
-      <div class="tile"><div class="val" id="tTotal">–</div><div class="lab">Total adverse-event reports</div></div>
-      <div class="tile"><div class="val" id="tRange">–</div><div class="lab">Reporting period</div></div>
-      <div class="tile"><div class="val" id="tPeak">–</div><div class="lab">Busiest month</div></div>
-    </div>
+    <div class="summ" id="summ"></div>
 
     <div class="card">
       <h3>Reports over time</h3>
       <p class="note">Number of adverse-event reports the FDA received each month.</p>
+      <div class="legend" id="legend"></div>
       <div class="chart-holder">
         <svg id="lineChart" viewBox="0 0 800 320" preserveAspectRatio="none" role="img" aria-label="Reports per month over time"></svg>
         <div class="tooltip" id="lineTip"></div>
@@ -180,8 +194,8 @@
 
     <div class="card">
       <h3>Top 10 reported side effects</h3>
-      <p class="note">The reactions named most often across all reports for this drug.</p>
-      <div class="bars" id="bars"></div>
+      <p class="note">The reactions named most often across all reports for each drug.</p>
+      <div class="bars-wrap" id="barsWrap"></div>
     </div>
   </div>
 
@@ -194,8 +208,13 @@
 <script>
 const API = "https://api.fda.gov/drug/event.json";
 const EXAMPLES = ["Ozempic","Wegovy","Aspirin","Viagra","Tylenol","Ibuprofen"];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmt = n => n.toLocaleString("en-US");
+const $ = id => document.getElementById(id);
 
-// ---- build search query: works for brand OR generic OR substance, any case ----
+// series colours pulled from CSS so light/dark stay in sync
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
 function buildSearch(name){
   const v = encodeURIComponent(name.trim().toUpperCase().replace(/"/g,''));
   return [
@@ -204,148 +223,181 @@ function buildSearch(name){
     `patient.drug.openfda.substance_name:"${v}"`
   ].join("+OR+");
 }
-const fmt = n => n.toLocaleString("en-US");
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-// ---- example chips ----
-const chips = document.getElementById("chips");
+// example chips fill drug 1
+const chips = $("chips");
 EXAMPLES.forEach(name=>{
   const b = document.createElement("button");
   b.type="button"; b.className="chip"; b.textContent=name;
-  b.onclick = ()=>{ document.getElementById("q").value=name; run(name); };
+  b.onclick = ()=>{ $("q1").value=name; run(); };
   chips.appendChild(b);
 });
 
-const $ = id => document.getElementById(id);
-const statusEl = $("status"), resultsEl = $("results");
+$("form").addEventListener("submit", e=>{ e.preventDefault(); run(); });
 
-document.getElementById("form").addEventListener("submit", e=>{
-  e.preventDefault();
-  const name = $("q").value.trim();
-  if(name) run(name);
-});
-
-async function run(name){
+async function fetchDrug(name){
   const search = buildSearch(name);
-  $("go").disabled = true;
-  resultsEl.classList.remove("show");
-  statusEl.className = ""; statusEl.textContent = `Searching the FDA database for “${name}”…`;
-  try{
-    const [timeRes, reacRes] = await Promise.all([
-      fetch(`${API}?search=${search}&count=receivedate`).then(r=>r.json()),
-      fetch(`${API}?search=${search}&count=patient.reaction.reactionmeddrapt.exact`).then(r=>r.json())
-    ]);
-    if(timeRes.error || !timeRes.results){
-      throw new Error(`No reports found for “${name}”. Check the spelling, or try a generic name (e.g. “semaglutide” instead of “Ozempic”).`);
-    }
-    render(name, timeRes.results, (reacRes.results||[]).slice(0,10));
-    statusEl.textContent = "";
-  }catch(err){
-    statusEl.className = "err";
-    statusEl.textContent = err.message || "Something went wrong. Please try again.";
-  }finally{
-    $("go").disabled = false;
-  }
-}
-
-function render(name, daily, reactions){
-  // ----- aggregate daily -> monthly -----
-  const byMonth = new Map(); // "YYYY-MM" -> count
-  let total = 0;
-  for(const d of daily){
+  const [timeRes, reacRes] = await Promise.all([
+    fetch(`${API}?search=${search}&count=receivedate`).then(r=>r.json()),
+    fetch(`${API}?search=${search}&count=patient.reaction.reactionmeddrapt.exact`).then(r=>r.json())
+  ]);
+  if(timeRes.error || !timeRes.results) return null;
+  // aggregate daily -> monthly
+  const byMonth = new Map(); let total = 0;
+  for(const d of timeRes.results){
     const key = d.time.slice(0,4)+"-"+d.time.slice(4,6);
     byMonth.set(key, (byMonth.get(key)||0) + d.count);
     total += d.count;
   }
   const months = [...byMonth.keys()].sort();
-  const series = months.map(m=>({ key:m, count:byMonth.get(m) }));
+  const points = months.map(m=>({ key:m, idx:mIdx(m), count:byMonth.get(m) }));
+  let peak = points[0];
+  for(const p of points) if(p.count>peak.count) peak=p;
+  return {
+    name, total, points, peak,
+    first: months[0], last: months[months.length-1],
+    reactions: (reacRes.results||[]).slice(0,10)
+  };
+}
+const mIdx = key => { const [y,m]=key.split("-").map(Number); return y*12+(m-1); };
 
-  // peak month
-  let peak = series[0];
-  for(const s of series) if(s.count > peak.count) peak = s;
-  const [py,pm] = peak.key.split("-");
+async function run(){
+  const n1 = $("q1").value.trim();
+  const n2 = $("q2").value.trim();
+  if(!n1){ $("q1").focus(); return; }
 
-  // ----- tiles -----
-  $("drugName").textContent = name;
-  $("tTotal").textContent = fmt(total);
-  const first = months[0], last = months[months.length-1];
-  $("tRange").textContent = `${first.split("-")[0]} – ${last.split("-")[0]}`;
-  $("tPeak").textContent = `${MONTHS[+pm-1]} ${py}`;
+  $("go").disabled = true;
+  $("results").classList.remove("show");
+  $("status").className = "";
+  $("status").textContent = n2 ? `Fetching FDA data for “${n1}” and “${n2}”…` : `Fetching FDA data for “${n1}”…`;
 
-  drawLine(series);
-  drawBars(reactions);
-  resultsEl.classList.add("show");
+  try{
+    const drugs = (await Promise.all([fetchDrug(n1), n2?fetchDrug(n2):null].filter(Boolean)));
+    // check for not-found
+    const wanted = n2 ? [n1,n2] : [n1];
+    const found = [];
+    for(let i=0;i<wanted.length;i++){
+      if(!drugs[i]) throw new Error(`No reports found for “${wanted[i]}”. Check the spelling, or try a generic name (e.g. “semaglutide” instead of “Ozempic”).`);
+      found.push(drugs[i]);
+    }
+    render(found);
+    $("status").textContent = "";
+  }catch(err){
+    $("status").className = "err";
+    $("status").textContent = err.message || "Something went wrong. Please try again.";
+  }finally{
+    $("go").disabled = false;
+  }
 }
 
-// ---------------- line chart ----------------
-function drawLine(series){
+function render(drugs){
+  const colors = [cssVar("--s1"), cssVar("--s2")];
+  const softs  = [cssVar("--s1-soft"), cssVar("--s2-soft")];
+  drugs.forEach((d,i)=>{ d.color=colors[i]; d.soft=softs[i]; });
+
+  // ----- summary cards -----
+  const summ = $("summ"); summ.innerHTML="";
+  drugs.forEach(d=>{
+    const [py,pm] = d.peak.key.split("-");
+    const card = document.createElement("div");
+    card.className="scard"; card.style.borderLeftColor=d.color;
+    card.innerHTML =
+      `<span class="nm">${d.name}</span>`+
+      `<span class="met"><b>${fmt(d.total)}</b> total reports</span>`+
+      `<span class="met">Period <b>${d.first.split("-")[0]}–${d.last.split("-")[0]}</b></span>`+
+      `<span class="met">Busiest <b>${MONTHS[+pm-1]} ${py}</b></span>`;
+    summ.appendChild(card);
+  });
+
+  // ----- legend (only when comparing) -----
+  const legend = $("legend");
+  if(drugs.length>1){
+    legend.innerHTML = drugs.map(d=>`<span><i style="background:${d.color}"></i>${d.name}</span>`).join("");
+  } else legend.innerHTML="";
+
+  drawLine(drugs);
+  drawBars(drugs);
+  $("results").classList.add("show");
+}
+
+// ---------------- line chart (1–2 series, shared time axis) ----------------
+function drawLine(drugs){
   const svg = $("lineChart"), tip = $("lineTip");
-  const W=800, H=320, m={t:14,r:14,b:28,l:52};
+  const W=800, H=320, m={t:14,r:16,b:28,l:52};
   const iw = W-m.l-m.r, ih = H-m.t-m.b;
-  const maxY = Math.max(...series.map(s=>s.count), 1);
-  const niceMax = niceCeil(maxY);
-  const n = series.length;
-  const x = i => m.l + (n<=1 ? iw/2 : (i/(n-1))*iw);
-  const y = v => m.t + ih - (v/niceMax)*ih;
+
+  const allIdx = drugs.flatMap(d=>d.points.map(p=>p.idx));
+  const minI = Math.min(...allIdx), maxI = Math.max(...allIdx);
+  const spanI = Math.max(1, maxI-minI);
+  const maxY = niceCeil(Math.max(...drugs.flatMap(d=>d.points.map(p=>p.count)), 1));
+  const x = idx => m.l + ((idx-minI)/spanI)*iw;
+  const y = v => m.t + ih - (v/maxY)*ih;
 
   let g = "";
-  // horizontal gridlines + y ticks
   const steps = 4;
   for(let i=0;i<=steps;i++){
-    const val = niceMax*i/steps, yy = y(val);
+    const val = maxY*i/steps, yy = y(val);
     g += `<line class="gridline" x1="${m.l}" y1="${yy}" x2="${W-m.r}" y2="${yy}"/>`;
     g += `<text class="tick y" x="${m.l-8}" y="${yy+4}">${fmt(Math.round(val))}</text>`;
   }
-  // x ticks: one per year (January or first month of each year)
-  let lastYear = null;
-  series.forEach((s,i)=>{
-    const yr = s.key.slice(0,4);
-    if(yr!==lastYear){
-      lastYear = yr;
-      g += `<text class="tick x" x="${x(i)}" y="${H-8}">${yr}</text>`;
-      g += `<line class="gridline" x1="${x(i)}" y1="${m.t}" x2="${x(i)}" y2="${m.t+ih}" opacity="0.5"/>`;
-    }
-  });
-  // area + line
-  const linePts = series.map((s,i)=>`${x(i)},${y(s.count)}`).join(" ");
-  const areaPts = `${m.l},${m.t+ih} ` + linePts + ` ${x(n-1)},${m.t+ih}`;
-  g += `<polygon class="area" points="${areaPts}"/>`;
-  g += `<polyline class="line" points="${linePts}"/>`;
+  // year x-labels
+  const firstYear = Math.ceil(minI/12), lastYear = Math.floor(maxI/12);
+  for(let yr=firstYear; yr<=lastYear; yr++){
+    const idx = yr*12; if(idx<minI||idx>maxI) continue;
+    g += `<text class="tick x" x="${x(idx)}" y="${H-8}">${yr}</text>`;
+    g += `<line class="gridline" x1="${x(idx)}" y1="${m.t}" x2="${x(idx)}" y2="${m.t+ih}" opacity="0.5"/>`;
+  }
   g += `<line class="axis" x1="${m.l}" y1="${m.t+ih}" x2="${W-m.r}" y2="${m.t+ih}"/>`;
-  // hover elements
+
+  // area (only when single drug – keeps 2-drug view clean) + lines
+  drugs.forEach((d,di)=>{
+    const pts = d.points.map(p=>`${x(p.idx).toFixed(1)},${y(p.count).toFixed(1)}`).join(" ");
+    if(drugs.length===1){
+      const first=d.points[0], last=d.points[d.points.length-1];
+      g += `<polygon points="${x(first.idx).toFixed(1)},${m.t+ih} ${pts} ${x(last.idx).toFixed(1)},${m.t+ih}" fill="${d.soft}"/>`;
+    }
+    g += `<polyline class="line" points="${pts}" stroke="${d.color}"/>`;
+  });
+  // hover layer
   g += `<line class="cross" id="lc" x1="0" y1="${m.t}" x2="0" y2="${m.t+ih}"/>`;
-  g += `<circle class="dot" id="ld" r="4.5"/>`;
-  // capture rect
+  drugs.forEach((d,di)=> g += `<circle class="dot" id="ld${di}" r="4.5" fill="${d.color}"/>`);
   g += `<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="cap"/>`;
   svg.innerHTML = g;
 
-  const cross = $("lc"), dot = $("ld"), cap = $("cap");
-  function moveHandler(evt){
-    const pt = svgPoint(svg, evt);
-    let i = Math.round((n<=1?0:(pt.x-m.l)/iw*(n-1)));
-    i = Math.max(0, Math.min(n-1, i));
-    const s = series[i], px = x(i), py = y(s.count);
-    cross.setAttribute("x1",px); cross.setAttribute("x2",px); cross.style.opacity=1;
-    dot.setAttribute("cx",px); dot.setAttribute("cy",py); dot.style.opacity=1;
-    // tooltip position: convert svg coords -> pixels
+  const cross = $("lc"), cap = $("cap"), holder = svg.parentElement;
+  const dots = drugs.map((d,di)=>$("ld"+di));
+
+  cap.addEventListener("mousemove", evt=>{
     const rect = svg.getBoundingClientRect();
-    const sx = rect.left + (px/W)*rect.width;
-    const sy = rect.top + (py/H)*rect.height;
-    const holder = svg.parentElement.getBoundingClientRect();
-    tip.style.left = (sx-holder.left)+"px";
-    tip.style.top  = (sy-holder.top)+"px";
-    const [yy,mm] = s.key.split("-");
-    tip.innerHTML = `<b>${fmt(s.count)}</b> reports<br>${MONTHS[+mm-1]} ${yy}`;
-    tip.style.opacity=1;
-  }
-  cap.addEventListener("mousemove", moveHandler);
-  cap.addEventListener("mouseleave", ()=>{ cross.style.opacity=0; dot.style.opacity=0; tip.style.opacity=0; });
+    const svgX = (evt.clientX-rect.left)/rect.width*W;
+    const targetIdx = Math.round(minI + (svgX-m.l)/iw*spanI);
+    cross.style.opacity=1;
+    const px = x(targetIdx);
+    cross.setAttribute("x1",px); cross.setAttribute("x2",px);
+
+    let rows = "", anyY = m.t+ih;
+    drugs.forEach((d,di)=>{
+      const p = nearest(d.points, targetIdx);
+      const dy = y(p.count);
+      dots[di].setAttribute("cx", x(p.idx)); dots[di].setAttribute("cy", dy); dots[di].style.opacity=1;
+      anyY = Math.min(anyY, dy);
+      const [yy,mm]=p.key.split("-");
+      rows += `<div><span class="k" style="background:${d.color}"></span><b>${fmt(p.count)}</b> · ${d.name} <span style="opacity:.7">(${MONTHS[+mm-1]} ${yy})</span></div>`;
+    });
+    const holderBox = holder.getBoundingClientRect();
+    tip.style.left = ((px/W)*rect.width + rect.left - holderBox.left)+"px";
+    tip.style.top  = ((anyY/H)*rect.height + rect.top - holderBox.top)+"px";
+    tip.innerHTML = rows; tip.style.opacity=1;
+  });
+  cap.addEventListener("mouseleave", ()=>{
+    cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
+  });
 }
 
-function svgPoint(svg, evt){
-  const rect = svg.getBoundingClientRect();
-  return { x: (evt.clientX-rect.left)/rect.width*800,
-           y: (evt.clientY-rect.top)/rect.height*320 };
+function nearest(points, idx){
+  let best=points[0], bd=Infinity;
+  for(const p of points){ const d=Math.abs(p.idx-idx); if(d<bd){bd=d;best=p;} }
+  return best;
 }
 function niceCeil(v){
   const pow = Math.pow(10, Math.floor(Math.log10(v)));
@@ -354,27 +406,35 @@ function niceCeil(v){
   return step*pow;
 }
 
-// ---------------- bars ----------------
-function drawBars(reactions){
-  const el = $("bars"); el.innerHTML="";
-  if(!reactions.length){ el.innerHTML = `<p style="color:var(--muted)">No reaction data available.</p>`; return; }
-  const max = reactions[0].count;
-  reactions.forEach(r=>{
-    const pct = (r.count/max*100).toFixed(1);
-    const term = titleCase(r.term);
-    const row = document.createElement("div");
-    row.className="bar-row";
-    row.innerHTML =
-      `<div class="bar-lab" title="${term}">${term}</div>`+
-      `<div class="bar-track"><div class="bar-fill" style="width:0%"></div></div>`+
-      `<div class="bar-val">${fmt(r.count)}</div>`;
-    el.appendChild(row);
-    requestAnimationFrame(()=>{ row.querySelector(".bar-fill").style.width = pct+"%"; });
+// ---------------- bars (one column per drug) ----------------
+function drawBars(drugs){
+  const wrap = $("barsWrap");
+  wrap.className = "bars-wrap" + (drugs.length>1 ? " two" : "");
+  wrap.innerHTML = "";
+  drugs.forEach(d=>{
+    const col = document.createElement("div");
+    let inner = drugs.length>1
+      ? `<div style="font-weight:600;font-size:0.9rem;margin-bottom:8px;color:${d.color}">${d.name}</div>`
+      : "";
+    const bars = document.createElement("div"); bars.className="bars";
+    if(!d.reactions.length){ bars.innerHTML=`<p style="color:var(--muted)">No reaction data.</p>`; }
+    const max = d.reactions.length ? d.reactions[0].count : 1;
+    d.reactions.forEach(r=>{
+      const pct = (r.count/max*100).toFixed(1);
+      const term = titleCase(r.term);
+      const row = document.createElement("div"); row.className="bar-row";
+      row.innerHTML =
+        `<div class="bar-lab" title="${term}">${term}</div>`+
+        `<div class="bar-track" style="background:${d.soft}"><div class="bar-fill" style="width:0%;background:${d.color}"></div></div>`+
+        `<div class="bar-val">${fmt(r.count)}</div>`;
+      bars.appendChild(row);
+      requestAnimationFrame(()=>{ row.querySelector(".bar-fill").style.width = pct+"%"; });
+    });
+    col.innerHTML = inner; col.appendChild(bars);
+    wrap.appendChild(col);
   });
 }
-function titleCase(s){
-  return s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
-}
+function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase()); }
 </script>
 </body>
 </html>
