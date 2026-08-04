@@ -9,3 +9,15 @@ __pycache__/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Local-only files (kept out of the repo)
+PRESENTATION.md
+make_slides.py
+make_powerpoint.py
+slides.html
+slides.pdf
+slides.pptx
+slides_png/
+reports_*.csv
+signal_*.csv
+signal_*.png
