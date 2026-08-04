@@ -361,6 +361,21 @@
         <span><b>Taken together ≠ an interaction.</b> This mostly reflects the typical treatment regimen for these patients (e.g. other diabetes or heart drugs), not proof that the combination caused harm. A report listing several drugs doesn't say which one is responsible.</span>
       </div>
     </div>
+
+    <div class="card" id="reportCard" style="display:none">
+      <div class="card-head">
+        <div>
+          <h3>🗂️ Reporting details — who, where &amp; how it's used</h3>
+          <p class="note">Who submitted these reports, which countries they came from, and how often the drug was being used <b>off-label</b> (for something it isn't officially approved for). Shares are of the drug's total reports.</p>
+        </div>
+        <button class="dl" id="dlReport" type="button">⬇ CSV</button>
+      </div>
+      <div class="who-grid" id="reportBody"></div>
+      <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
+        <span class="ic">⚠️</span>
+        <span>Most reports come from <b>consumers</b> and from the <b>U.S.</b>, which shapes what gets reported — this is a picture of <i>who reports</i>, not of where the drug is most risky. Off-label use is common and often legal; it's noted here because it affects how reports should be read.</span>
+      </div>
+    </div>
   </div>
 
   <div id="revResults" style="display:none">
@@ -680,6 +695,7 @@ function render(drugs){
   drawSignals(drugs);   // async — fills its card when the extra lookups finish
   drawEmerging(drugs);  // async — which side effects are rising over time
   drawCo(drugs);        // async — drugs commonly taken alongside
+  drawReport(drugs);    // async — who/where reported & off-label use
 }
 
 // ---------------- line chart (1–2 series, shared time axis) ----------------
@@ -755,6 +771,75 @@ function drawLine(drugs){
     cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
   });
 }
+
+// ---------------- reporting details: who / where / off-label ----------------
+const QUAL = { "1":"Physician","2":"Pharmacist","3":"Other health pro","4":"Lawyer / attorney","5":"Consumer" };
+const COUNTRY = { US:"United States",CA:"Canada",GB:"United Kingdom",FR:"France",AU:"Australia",
+  DE:"Germany",EU:"Europe (unspecified)",JP:"Japan",IT:"Italy",ES:"Spain",BR:"Brazil",IN:"India",
+  NL:"Netherlands",SE:"Sweden",CH:"Switzerland",MX:"Mexico",KR:"South Korea",BE:"Belgium" };
+async function fetchReport(d){
+  const s = buildSearch(d.name);
+  const off = encodeURIComponent("OFF LABEL USE");
+  const unapp = encodeURIComponent("PRODUCT USE IN UNAPPROVED INDICATION");
+  const [qualRes, ctyRes, offN, unappN] = await Promise.all([
+    fetch(`${API}?search=${s}&count=primarysource.qualification`).then(r=>r.json()),
+    fetch(`${API}?search=${s}&count=occurcountry.exact&limit=6`).then(r=>r.json()),
+    metaTotal(`(${s})+AND+patient.reaction.reactionmeddrapt.exact:"${off}"`),
+    metaTotal(`(${s})+AND+patient.reaction.reactionmeddrapt.exact:"${unapp}"`)
+  ]);
+  const nD = d.nD || 1;
+  const who = (qualRes.results||[]).map(r=>({ name:QUAL[r.term]||"Unknown", count:r.count, share:100*r.count/nD }))
+               .sort((a,b)=>b.count-a.count);
+  const where = (ctyRes.results||[]).map(r=>({ name:COUNTRY[r.term]||r.term, count:r.count, share:100*r.count/nD }));
+  return { who, where, offPct:100*offN/nD, unappPct:100*unappN/nD, offN, unappN };
+}
+async function drawReport(drugs){
+  const card=$("reportCard"), body=$("reportBody");
+  card.style.display="block";
+  body.className = "who-grid" + (drugs.length>1?" two":"");
+  body.innerHTML = `<p style="color:var(--muted)">Loading reporting details…</p>`;
+  try{
+    const data = await Promise.all(drugs.map(fetchReport));
+    drugs.forEach((d,i)=> d.report = data[i]);
+    body.innerHTML = drugs.map((d,i)=> reportBlockHTML(d, data[i])).join("");
+  }catch(err){
+    body.innerHTML = `<p style="color:var(--muted)">Couldn't load reporting details (${err.message}).</p>`;
+  }
+}
+function miniBars(rows, d){
+  if(!rows.length) return `<p style="color:var(--muted);font-size:.82rem">Not reported.</p>`;
+  const max = Math.max(...rows.map(r=>r.share), 1);
+  return rows.map(r=>
+    `<div class="bar-row" style="grid-template-columns:120px 1fr 44px"><div class="bar-lab" title="${r.name}">${r.name}</div>`+
+    `<div class="bar-track" style="background:${d.soft}"><div class="bar-fill" style="width:${(r.share/max*100).toFixed(1)}%;background:${d.color}"></div></div>`+
+    `<div class="bar-val">${Math.round(r.share)}%</div></div>`).join("");
+}
+function reportBlockHTML(d, r){
+  const head = CURRENT.length>1 ? `<div class="who-h" style="color:${d.color}">${d.name}</div>` : "";
+  return `<div>${head}
+    <div class="who-sub">Who reported</div>
+    <div class="bars">${miniBars(r.who, d)}</div>
+    <div class="who-sub">Where reported</div>
+    <div class="bars">${miniBars(r.where, d)}</div>
+    <div class="who-sub">Off-label use</div>
+    <div class="chips-out">
+      <span class="outchip"><b>${r.offPct.toFixed(1)}%</b> off-label use</span>
+      <span class="outchip"><b>${r.unappPct.toFixed(1)}%</b> unapproved indication</span>
+    </div>
+  </div>`;
+}
+$("dlReport").onclick = ()=>{
+  if(!CURRENT.length) return;
+  const rows=[["drug","category","item","reports","share_percent"]];
+  CURRENT.forEach(d=>{
+    const r=d.report; if(!r) return;
+    r.who.forEach(x=>rows.push([d.name,"reporter",x.name,x.count,x.share.toFixed(2)]));
+    r.where.forEach(x=>rows.push([d.name,"country",x.name,x.count,x.share.toFixed(2)]));
+    rows.push([d.name,"use","off-label use",r.offN,r.offPct.toFixed(2)]);
+    rows.push([d.name,"use","unapproved indication",r.unappN,r.unappPct.toFixed(2)]);
+  });
+  downloadCSV(`reporting_details_${slug()}.csv`, rows);
+};
 
 // ---------------- commonly taken alongside ----------------
 async function fetchCo(d){
