@@ -178,6 +178,12 @@
   .outchip.bad b{ color:#c0392b; }
   @media (prefers-color-scheme: dark){ .outchip.bad b{ color:#ff8a80; } }
 
+  /* emerging trend */
+  .spark{ display:block; }
+  .trend{ font-size:0.8rem; font-weight:600; white-space:nowrap; }
+  .trend.up{ color:#c0392b; } .trend.flat{ color:var(--muted); } .trend.down{ color:var(--muted); }
+  @media (prefers-color-scheme: dark){ .trend.up{ color:#ff8a80; } }
+
   /* signal table */
   .sig-title{ font-weight:600; font-size:0.9rem; margin:14px 0 6px; }
   .sig-scroll{ overflow-x:auto; }
@@ -312,6 +318,21 @@
       <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
         <span class="ic">⚠️</span>
         <span><b>A signal is a question, not an answer.</b> A high PRR means a side effect is <i>reported</i> more than expected — it does <b>not</b> prove the drug causes it. Reporting is biased by media attention, lawsuits, and how new a drug is. Real safety decisions need clinical studies. Highlighted rows meet the standard screening rule (PRR ≥ 2, at least 3 reports, and statistically notable).</span>
+      </div>
+    </div>
+
+    <div class="card" id="emergeCard" style="display:none">
+      <div class="card-head">
+        <div>
+          <h3>📈 Emerging signals — reported more <i>over time</i></h3>
+          <p class="note">A side effect can be common but steady, or newly rising. This tracks each side effect's <b>share of the drug's reports</b> year by year — using share (not raw counts) so a drug simply becoming more popular doesn't look like a new problem. Rising share = an emerging concern.</p>
+        </div>
+        <button class="dl" id="dlEmerge" type="button">⬇ CSV</button>
+      </div>
+      <div id="emergeBody"></div>
+      <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
+        <span class="ic">⚠️</span>
+        <span><b>A rising share reflects rising <i>reporting</i>, not proven rising risk.</b> Lawsuits, news coverage, and new warnings all drive reports up. It flags what people are increasingly reporting — a lead to investigate, not a measured change in how dangerous the drug is.</span>
       </div>
     </div>
 
@@ -642,6 +663,7 @@ function render(drugs){
   $("results").classList.add("show");
   drawWho(drugs);       // async — demographics & seriousness
   drawSignals(drugs);   // async — fills its card when the extra lookups finish
+  drawEmerging(drugs);  // async — which side effects are rising over time
 }
 
 // ---------------- line chart (1–2 series, shared time axis) ----------------
@@ -717,6 +739,99 @@ function drawLine(drugs){
     cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
   });
 }
+
+// ---------------- emerging signals (rising share over time) ----------------
+const EMERGE_TOP = 12;   // analyse each drug's 12 most-reported side effects
+
+function drugYearlyTotals(d){
+  const y = {};
+  d.points.forEach(p=>{ const yr=p.key.slice(0,4); y[yr]=(y[yr]||0)+p.count; });
+  return y;
+}
+async function reactionYearly(d, term){
+  const s = buildSearch(d.name);
+  const q = encodeURIComponent(term.replace(/"/g,''));
+  const j = await fetch(`${API}?search=(${s})+AND+patient.reaction.reactionmeddrapt.exact:"${q}"&count=receivedate`).then(r=>r.json());
+  const y = {};
+  (j.results||[]).forEach(r=>{ const yr=r.time.slice(0,4); y[yr]=(y[yr]||0)+r.count; });
+  return y;
+}
+function computeTrend(shares){   // shares: [{year, share, count}] ascending
+  if(shares.length<4) return { label:"— short history", cls:"flat", ratio:null };
+  const recent = shares.slice(-2);
+  const base   = shares.slice(0,-2).slice(-3);
+  const avg = a => a.reduce((s,x)=>s+x,0)/a.length;
+  const meanR = avg(recent.map(s=>s.share));
+  const meanB = avg(base.map(s=>s.share));
+  const recentCount = recent.reduce((s,x)=>s+x.count,0);
+  const ratio = meanR / Math.max(meanB, 0.05);
+  if(ratio>=1.75 && recentCount>=10) return { label:`📈 rising ${ratio.toFixed(1)}×`, cls:"up", ratio, rising:true };
+  if(ratio<=0.6)                     return { label:`📉 declining`, cls:"down", ratio };
+  return { label:`▬ stable`, cls:"flat", ratio };
+}
+function sparkline(shares, color){
+  const W=96,H=26,pad=3;
+  const max=Math.max(...shares.map(s=>s.share),0.001);
+  const n=shares.length;
+  const x=i=> pad + (n<=1?0:(i/(n-1))*(W-2*pad));
+  const y=v=> H-pad - (v/max)*(H-2*pad);
+  const pts=shares.map((s,i)=>`${x(i).toFixed(1)},${y(s.share).toFixed(1)}`).join(" ");
+  const last=shares[shares.length-1];
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`+
+         `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/>`+
+         `<circle cx="${x(n-1).toFixed(1)}" cy="${y(last.share).toFixed(1)}" r="2.2" fill="${color}"/></svg>`;
+}
+async function drawEmerging(drugs){
+  const card=$("emergeCard"), body=$("emergeBody");
+  card.style.display="block";
+  body.innerHTML = `<p style="color:var(--muted)">Checking which side effects are rising over time…</p>`;
+  try{
+    for(const d of drugs){
+      const dy = drugYearlyTotals(d);
+      const terms = d.reactionsAll.filter(r=>!SIG_STOPLIST.has(r.term) && r.count>=20).slice(0,EMERGE_TOP);
+      const series = await Promise.all(terms.map(t=>reactionYearly(d, t.term)));
+      const rows = terms.map((t,i)=>{
+        const ry = series[i];
+        const shares = Object.keys(ry).filter(y=>dy[y]).sort()
+          .map(y=>({ year:y, count:ry[y], share: 100*ry[y]/dy[y] }));
+        return { term:titleCase(t.term), total:t.count, shares, trend:computeTrend(shares) };
+      }).filter(r=>r.shares.length>=2)
+        .sort((a,b)=> (b.trend.ratio||0) - (a.trend.ratio||0));
+      d.emerging = rows;
+    }
+    renderEmerging(drugs);
+  }catch(err){
+    body.innerHTML = `<p style="color:var(--muted)">Couldn't check trends (${err.message}).</p>`;
+  }
+}
+function renderEmerging(drugs){
+  let html="";
+  drugs.forEach(d=>{
+    if(!d.emerging || !d.emerging.length) return;
+    if(drugs.length>1) html += `<div class="sig-title" style="color:${d.color}">${d.name}</div>`;
+    html += `<div class="sig-scroll"><table class="sig"><thead><tr>`+
+            `<th>Side effect</th><th style="text-align:right">Reports</th>`+
+            `<th>Share of reports by year</th><th>Trend</th></tr></thead><tbody>`;
+    d.emerging.forEach(r=>{
+      const latest = r.shares[r.shares.length-1];
+      html += `<tr class="${r.trend.rising?'signal':''}">`+
+              `<td>${r.term}</td>`+
+              `<td class="num">${fmt(r.total)}</td>`+
+              `<td>${sparkline(r.shares, d.color)} <span style="font-size:.75rem;color:var(--muted)">now ${latest.share.toFixed(1)}%</span></td>`+
+              `<td class="trend ${r.trend.cls}">${r.trend.label}</td>`+
+              `</tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+  $("emergeBody").innerHTML = html || `<p style="color:var(--muted)">Not enough history to judge trends.</p>`;
+}
+$("dlEmerge").onclick = ()=>{
+  if(!CURRENT.length) return;
+  const rows=[["drug","side_effect","total_reports","year","reports_that_year","share_percent","trend"]];
+  CURRENT.forEach(d=> (d.emerging||[]).forEach(r=> r.shares.forEach(s=>
+    rows.push([d.name, r.term, r.total, s.year, s.count, s.share.toFixed(2), r.trend.label.replace(/[^\x20-\x7e]/g,'').trim()]))));
+  downloadCSV(`emerging_${slug()}.csv`, rows);
+};
 
 // ---------------- who is affected & how serious ----------------
 async function metaTotal(query){
