@@ -156,6 +156,26 @@
   .bar-fill{ height:100%; border-radius:5px; min-width:2px; transition:width .5s ease; }
   .bar-val{ font-size:0.82rem; color:var(--ink-2); font-variant-numeric:tabular-nums; }
 
+  /* signal table */
+  .sig-title{ font-weight:600; font-size:0.9rem; margin:14px 0 6px; }
+  .sig-scroll{ overflow-x:auto; }
+  table.sig{ border-collapse:collapse; width:100%; font-size:0.86rem; }
+  table.sig th, table.sig td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.sig th{ color:var(--muted); font-weight:600; font-size:0.76rem; text-transform:uppercase; letter-spacing:0.03em; }
+  table.sig td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  table.sig tr.signal td{ background:var(--s1-soft); }
+  .prr-pill{ display:inline-block; padding:1px 8px; border-radius:999px; font-weight:600; font-size:0.8rem; }
+  .prr-strong{ background:#fde3dd; color:#a3341c; }
+  .prr-elev{ background:#fdeed6; color:#8a5a00; }
+  .prr-none{ color:var(--muted); }
+  @media (prefers-color-scheme: dark){
+    .prr-strong{ background:#3a1f18; color:#f0a58c; }
+    .prr-elev{ background:#33280f; color:#f0cd7f; }
+  }
+  .flag{ font-weight:600; }
+  .flag.yes{ color:#c0392b; } .flag.no{ color:var(--muted); }
+  @media (prefers-color-scheme: dark){ .flag.yes{ color:#ff8a80; } }
+
   footer{ margin-top:34px; color:var(--muted); font-size:0.8rem; border-top:1px solid var(--border); padding-top:14px; }
   footer a{ color:var(--s1); }
 
@@ -227,6 +247,21 @@
       <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
         <span class="ic">⚠️</span>
         <span><b>Read this as a rough signal, not a real risk rate.</b> The reports come from <i>everyone</i> (all ages, worldwide), but the prescription count is <b>Medicare only</b> (mostly 65+, U.S.) — so the two don't perfectly match. It's most meaningful for <i>comparing two similar drugs</i>, not as an absolute number. Drugs with no reliable Medicare data (over-the-counter or newly-covered) show no rate.</span>
+      </div>
+    </div>
+
+    <div class="card" id="signalCard" style="display:none">
+      <div class="card-head">
+        <div>
+          <h3>⬆ Signal detection — reported unusually often</h3>
+          <p class="note">A side effect's <b>PRR</b> (Proportional Reporting Ratio) compares how often it's reported <i>for this drug</i> versus <i>for all drugs</i>. PRR ≈ 1 is ordinary; a high PRR means it stands out — a <b>signal</b> worth investigating. This is the real method regulators use.</p>
+        </div>
+        <button class="dl" id="dlSignal" type="button">⬇ CSV</button>
+      </div>
+      <div id="signalBody"></div>
+      <div class="warn" style="margin:14px 0 2px;font-size:0.82rem">
+        <span class="ic">⚠️</span>
+        <span><b>A signal is a question, not an answer.</b> A high PRR means a side effect is <i>reported</i> more than expected — it does <b>not</b> prove the drug causes it. Reporting is biased by media attention, lawsuits, and how new a drug is. Real safety decisions need clinical studies. Highlighted rows meet the standard screening rule (PRR ≥ 2, at least 3 reports, and statistically notable).</span>
       </div>
     </div>
 
@@ -323,6 +358,13 @@ $("dlReac").onclick = ()=>{
   CURRENT.forEach(d=> d.reactions.forEach((r,i)=> rows.push([d.name, i+1, r.term, r.count])));
   downloadCSV(`side_effects_${slug()}.csv`, rows);
 };
+$("dlSignal").onclick = ()=>{
+  if(!CURRENT.length) return;
+  const rows = [["drug","side_effect","reports","PRR","chi_square","is_signal"]];
+  CURRENT.forEach(d=> (d.signals||[]).forEach(r=>
+    rows.push([d.name, r.term, r.reports, r.prr.toFixed(2), r.chi.toFixed(1), r.signal?"yes":"no"])));
+  downloadCSV(`signals_${slug()}.csv`, rows);
+};
 $("btnPrint").onclick = ()=> window.print();
 $("btnShare").onclick = async ()=>{
   const link = location.href;
@@ -337,11 +379,14 @@ function flashShare(msg){
 
 async function fetchDrug(name){
   const search = buildSearch(name);
-  const [timeRes, reacRes] = await Promise.all([
+  const [timeRes, reacRes, metaRes] = await Promise.all([
     fetch(`${API}?search=${search}&count=receivedate`).then(r=>r.json()),
-    fetch(`${API}?search=${search}&count=patient.reaction.reactionmeddrapt.exact`).then(r=>r.json())
+    fetch(`${API}?search=${search}&count=patient.reaction.reactionmeddrapt.exact`).then(r=>r.json()),
+    fetch(`${API}?search=${search}&limit=1`).then(r=>r.json())
   ]);
   if(timeRes.error || !timeRes.results) return null;
+  // N_D = true total reports for this drug (for the PRR denominator)
+  const nD = (metaRes && metaRes.meta && metaRes.meta.results) ? metaRes.meta.results.total : 0;
   // aggregate daily -> monthly
   const byMonth = new Map(); let total = 0;
   for(const d of timeRes.results){
@@ -360,11 +405,14 @@ async function fetchDrug(name){
   for(const p of points){ const y = +p.key.slice(0,4); if(y>=2020 && y<=2024) reportsWin += p.count; }
   const rate = rx ? (reportsWin / rx.claims) * 100000 : null;
 
+  const reactionsAll = reacRes.results || [];
   return {
-    name, total, points, peak,
+    name, total: nD || total, datedTotal: total, nD: nD || total, points, peak,
     first: months[0], last: months[months.length-1],
-    reactions: (reacRes.results||[]).slice(0,10),
-    rx, reportsWin, rate
+    reactions: reactionsAll.slice(0,10),
+    reactionsAll,
+    rx, reportsWin, rate,
+    signals: null   // filled in later by computeSignals()
   };
 }
 const mIdx = key => { const [y,m]=key.split("-").map(Number); return y*12+(m-1); };
@@ -432,6 +480,7 @@ function render(drugs){
   drawRate(drugs);
   drawBars(drugs);
   $("results").classList.add("show");
+  drawSignals(drugs);   // async — fills its card when the extra lookups finish
 }
 
 // ---------------- line chart (1–2 series, shared time axis) ----------------
@@ -506,6 +555,96 @@ function drawLine(drugs){
   cap.addEventListener("mouseleave", ()=>{
     cross.style.opacity=0; tip.style.opacity=0; dots.forEach(d=>d.style.opacity=0);
   });
+}
+
+// ---------------- signal detection (PRR) ----------------
+// Administrative / non-medical MedDRA terms that aren't real side effects.
+const SIG_STOPLIST = new Set([
+  "OFF LABEL USE","PRODUCT USE IN UNAPPROVED INDICATION","DRUG INEFFECTIVE",
+  "PRODUCT USE ISSUE","THERAPEUTIC RESPONSE DECREASED","DRUG DOSE OMISSION",
+  "NO ADVERSE EVENT","MEDICATION ERROR","INCORRECT DOSE ADMINISTERED",
+  "WRONG TECHNIQUE IN PRODUCT USAGE PROCESS","INTENTIONAL PRODUCT USE ISSUE",
+  "DRUG ADMINISTRATION ERROR","POOR QUALITY PRODUCT ADMINISTERED",
+  "UNEVALUABLE EVENT","PRODUCT DOSE OMISSION ISSUE","EXPIRED PRODUCT ADMINISTERED"
+]);
+const SCORE_TOP = 20;   // score each drug's 20 most-reported side effects
+
+let GLOBAL_TOTAL = null;                 // N: all reports in FAERS (cached)
+const NR_CACHE = new Map();              // reaction term -> background report count
+
+async function getGlobalTotal(){
+  if(GLOBAL_TOTAL!=null) return GLOBAL_TOTAL;
+  const j = await fetch(`${API}?limit=1`).then(r=>r.json());
+  GLOBAL_TOTAL = j.meta.results.total;
+  return GLOBAL_TOTAL;
+}
+async function getBackground(term){       // N_R: reports with this reaction across ALL drugs
+  if(NR_CACHE.has(term)) return NR_CACHE.get(term);
+  const q = encodeURIComponent(term.replace(/"/g,''));
+  const j = await fetch(`${API}?search=patient.reaction.reactionmeddrapt.exact:"${q}"&limit=1`).then(r=>r.json());
+  const n = (j.meta && j.meta.results) ? j.meta.results.total : 0;
+  NR_CACHE.set(term, n);
+  return n;
+}
+
+// PRR + chi-square for one 2x2 table
+function prrStats(a, nD, nR, N){
+  const b = nD - a, c = nR - a, d = N - nD - c;
+  const prr = (a/nD) / (c/(N-nD));
+  const chi = N * Math.pow(a*d - b*c, 2) / ((a+b)*(c+d)*(a+c)*(b+d));
+  const signal = a>=3 && prr>=2 && chi>=4;
+  return { prr, chi, signal };
+}
+
+async function drawSignals(drugs){
+  const card = $("signalCard"), body = $("signalBody");
+  card.style.display = "block";
+  body.innerHTML = `<p style="color:var(--muted)">Calculating signals… (checking how often each side effect is reported across all drugs)</p>`;
+
+  try{
+    const N = await getGlobalTotal();
+    for(const d of drugs){
+      const terms = d.reactionsAll
+        .filter(r => !SIG_STOPLIST.has(r.term) && r.count>=3)
+        .slice(0, SCORE_TOP);
+      const bg = await Promise.all(terms.map(t => getBackground(t.term)));
+      const rows = terms.map((t,i)=>{
+        const s = prrStats(t.count, d.nD, bg[i], N);
+        return { term:titleCase(t.term), reports:t.count, prr:s.prr, chi:s.chi, signal:s.signal };
+      }).sort((x,y)=> y.prr - x.prr);
+      d.signals = rows;
+    }
+    renderSignalTables(drugs);
+  }catch(err){
+    body.innerHTML = `<p style="color:var(--muted)">Couldn't calculate signals right now (${err.message}).</p>`;
+  }
+}
+
+function prrPill(prr){
+  if(prr>=5) return `<span class="prr-pill prr-strong">${prr.toFixed(1)}×</span>`;
+  if(prr>=2) return `<span class="prr-pill prr-elev">${prr.toFixed(1)}×</span>`;
+  return `<span class="prr-pill prr-none">${prr.toFixed(1)}×</span>`;
+}
+function renderSignalTables(drugs){
+  const body = $("signalBody");
+  let html = "";
+  drugs.forEach(d=>{
+    if(!d.signals || !d.signals.length){ return; }
+    if(drugs.length>1) html += `<div class="sig-title" style="color:${d.color}">${d.name}</div>`;
+    html += `<div class="sig-scroll"><table class="sig"><thead><tr>`+
+            `<th>Side effect</th><th style="text-align:right">Reports</th>`+
+            `<th style="text-align:right">PRR</th><th>Signal?</th></tr></thead><tbody>`;
+    d.signals.forEach(r=>{
+      html += `<tr class="${r.signal?'signal':''}">`+
+              `<td>${r.term}</td>`+
+              `<td class="num">${fmt(r.reports)}</td>`+
+              `<td class="num">${prrPill(r.prr)}</td>`+
+              `<td><span class="flag ${r.signal?'yes':'no'}">${r.signal?'⬆ signal':'—'}</span></td>`+
+              `</tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+  body.innerHTML = html || `<p style="color:var(--muted)">Not enough data to score signals.</p>`;
 }
 
 // ---------------- rate (reports per 100k Rx) ----------------
