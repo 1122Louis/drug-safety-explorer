@@ -196,6 +196,9 @@
   .prr-strong{ background:#fde3dd; color:#a3341c; }
   .prr-elev{ background:#fdeed6; color:#8a5a00; }
   .prr-none{ color:var(--muted); }
+  .boxed{ background:#fdeceb; border:1px solid #e0a29c; border-radius:8px; padding:10px 12px; font-size:0.82rem; color:#7a1c12; margin:2px 0 8px; }
+  @media (prefers-color-scheme: dark){ .boxed{ background:#3a1712; border-color:#7a2b20; color:#f0a58c; } }
+  .labeltext{ font-size:0.8rem; color:var(--ink-2); max-height:130px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px 10px; margin-bottom:6px; white-space:pre-wrap; }
   @media (prefers-color-scheme: dark){
     .prr-strong{ background:#3a1f18; color:#f0a58c; }
     .prr-elev{ background:#33280f; color:#f0cd7f; }
@@ -347,6 +350,16 @@
       <div class="bars-wrap" id="barsWrap"></div>
     </div>
 
+    <div class="card" id="labelCard" style="display:none">
+      <div class="card-head">
+        <div>
+          <h3>📋 Established risks — from the official FDA label</h3>
+          <p class="note">What the FDA has officially recognised (the label reflects clinical-trial evidence and post-market surveillance). In the signal table above, each reaction is marked "✓ known" if it already appears on the label, or "⚠ not on label" if it may be a newer signal worth investigating.</p>
+        </div>
+      </div>
+      <div class="who-grid" id="labelBody"></div>
+    </div>
+
     <div class="card" id="coCard" style="display:none">
       <div class="card-head">
         <div>
@@ -408,6 +421,7 @@
 
 <script>
 const API = "https://api.fda.gov/drug/event.json";
+const API_LABEL = "https://api.fda.gov/drug/label.json";
 const EXAMPLES = ["Ozempic","Jardiance","Trulicity","Eliquis","Januvia","Farxiga"];
 
 // Medicare Part D total prescription claims 2020–2024, from CMS "Part D Spending
@@ -705,6 +719,7 @@ function render(drugs){
   drawEmerging(drugs);  // async — which side effects are rising over time
   drawCo(drugs);        // async — drugs commonly taken alongside
   drawReport(drugs);    // async — who/where reported & off-label use
+  drawLabel(drugs);     // async — established risks from the FDA label
 }
 
 // ---------------- line chart (1–2 series, shared time axis) ----------------
@@ -1059,6 +1074,69 @@ function whoBlockHTML(d, w){
 }
 function drugs_len(){ return CURRENT.length; }
 
+// ---------------- established risks from the FDA drug label ----------------
+async function fetchLabel(name){
+  const v = encodeURIComponent(name.trim().toUpperCase().replace(/"/g,''));
+  const q = `openfda.brand_name:"${v}"+OR+openfda.generic_name:"${v}"+OR+openfda.substance_name:"${v}"`;
+  try{
+    const j = await fetch(`${API_LABEL}?search=${q}&limit=1`).then(r=>r.json());
+    if(j.error || !j.results || !j.results.length) return null;
+    const r = j.results[0];
+    const get = k => Array.isArray(r[k]) ? r[k].join("\n") : (r[k]||"");
+    return {
+      boxed: get("boxed_warning"),
+      warnings: get("warnings_and_cautions") || get("warnings"),
+      adverse: get("adverse_reactions"),
+      text: JSON.stringify(r).toLowerCase()
+    };
+  }catch(e){ return null; }
+}
+function getLabel(d){
+  if(!d._labelP) d._labelP = fetchLabel(d.name).then(l=>{ d.label = l; return l; });
+  return d._labelP;
+}
+const LBL_STOP = new Set(["increased","decreased","impaired","abnormal","acute","chronic","product","use","in","of","the","and","reaction","disorder","nos","upper","lower"]);
+function labelMentions(term, txt){
+  if(!txt) return null;
+  const t = term.toLowerCase();
+  if(txt.includes(t)) return true;
+  const words = t.split(/[^a-z]+/).filter(w=>w.length>3 && !LBL_STOP.has(w));
+  if(!words.length) return false;
+  if(txt.includes(words.join(" "))) return true;
+  return words.every(w=>txt.includes(w));
+}
+function labelTag(term, label){
+  if(!label || !label.text) return '<span style="color:var(--muted)">–</span>';
+  return labelMentions(term, label.text)
+    ? '<span style="color:#0a7d33;font-weight:600">✓ known</span>'
+    : '<span style="color:#c0392b;font-weight:600">⚠ not on label</span>';
+}
+async function drawLabel(drugs){
+  const card=$("labelCard"), body=$("labelBody");
+  card.style.display="block";
+  body.className = "who-grid" + (drugs.length>1?" two":"");
+  body.innerHTML = `<p style="color:var(--muted)">Loading the official FDA label…</p>`;
+  try{
+    await Promise.all(drugs.map(getLabel));
+    body.innerHTML = drugs.map(labelBlockHTML).join("");
+  }catch(err){
+    body.innerHTML = `<p style="color:var(--muted)">Couldn't load the label (${err.message}).</p>`;
+  }
+}
+function labelBlockHTML(d){
+  const head = CURRENT.length>1 ? `<div class="who-h" style="color:${d.color}">${d.name}</div>` : "";
+  const l = d.label;
+  if(!l) return `<div>${head}<p style="color:var(--muted)">No FDA label found for this drug.</p></div>`;
+  const esc = s => (s||"").replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const clip = (s,n) => { s=esc(s); return s.length>n ? s.slice(0,n).trim()+"…" : s; };
+  let h = `<div>${head}`;
+  if(l.boxed)    h += `<div class="boxed"><b>⚠ Boxed warning</b><br>${clip(l.boxed,600)}</div>`;
+  if(l.warnings) h += `<div class="who-sub">Warnings &amp; precautions</div><div class="labeltext">${clip(l.warnings,700)}</div>`;
+  if(l.adverse)  h += `<div class="who-sub">Adverse reactions (from label)</div><div class="labeltext">${clip(l.adverse,700)}</div>`;
+  if(!l.boxed && !l.warnings && !l.adverse) h += `<p style="color:var(--muted)">Label found, but no warning sections.</p>`;
+  return h + `</div>`;
+}
+
 // ---------------- signal detection (PRR) ----------------
 // Administrative / non-medical MedDRA terms that aren't real side effects.
 const SIG_STOPLIST = new Set([
@@ -1116,6 +1194,7 @@ async function drawSignals(drugs){
       }).sort((x,y)=> y.prr - x.prr);
       d.signals = rows;
     }
+    await Promise.all(drugs.map(getLabel));
     renderSignalTables(drugs);
   }catch(err){
     body.innerHTML = `<p style="color:var(--muted)">Couldn't calculate signals right now (${err.message}).</p>`;
@@ -1135,13 +1214,14 @@ function renderSignalTables(drugs){
     if(drugs.length>1) html += `<div class="sig-title" style="color:${d.color}">${d.name}</div>`;
     html += `<div class="sig-scroll"><table class="sig"><thead><tr>`+
             `<th>Side effect</th><th style="text-align:right">Reports</th>`+
-            `<th style="text-align:right">PRR</th><th>Signal?</th></tr></thead><tbody>`;
+            `<th style="text-align:right">PRR</th><th>Signal?</th><th>On label?</th></tr></thead><tbody>`;
     d.signals.forEach(r=>{
       html += `<tr class="${r.signal?'signal':''}">`+
               `<td>${r.term}</td>`+
               `<td class="num">${fmt(r.reports)}</td>`+
               `<td class="num">${prrPill(r.prr)}</td>`+
               `<td><span class="flag ${r.signal?'yes':'no'}">${r.signal?'⬆ signal':'—'}</span></td>`+
+              `<td>${labelTag(r.term, d.label)}</td>`+
               `</tr>`;
     });
     html += `</tbody></table></div>`;
